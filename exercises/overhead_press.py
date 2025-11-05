@@ -1,0 +1,61 @@
+# exercises/overhead_press.py
+import cv2
+import sys
+import os
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from utils.angle_calculator import calculate_angle, get_landmark_coords
+
+
+class OverheadPressAnalyzer:
+    def __init__(self):
+        self.form_score = 100
+        self.feedback = []
+        self.rep_count = 0
+        self.is_up = False
+        
+    def analyze(self, landmarks, image):
+        self.form_score = 100
+        self.feedback = []
+        
+        try:
+            shoulder = get_landmark_coords(landmarks, 12)
+            elbow = get_landmark_coords(landmarks, 14)
+            wrist = get_landmark_coords(landmarks, 16)
+            
+            elbow_angle = calculate_angle(shoulder, elbow, wrist)
+            
+            if elbow_angle > 160:
+                self.feedback.append("✅ Full lockout!")
+            else:
+                self.feedback.append("⚠️ Lock out fully!")
+                self.form_score -= 20
+            
+            self._count_reps(elbow_angle)
+            self._draw_feedback(image)
+            
+        except Exception as e:
+            self.feedback.append(f"Error: {str(e)}")
+            
+        return image
+    
+    def _count_reps(self, elbow_angle):
+        if elbow_angle > 160 and not self.is_up:
+            self.is_up = True
+            self.rep_count += 1
+        elif elbow_angle < 100 and self.is_up:
+            self.is_up = False
+    
+    def _draw_feedback(self, image):
+        score_color = (0, 255, 0) if self.form_score >= 80 else (0, 0, 255)
+        cv2.putText(image, f"Form: {self.form_score}/100", (10, 30), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 1, score_color, 2)
+        cv2.putText(image, f"Reps: {self.rep_count}", (10, 70), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        
+        y_offset = 110
+        for msg in self.feedback:
+            cv2.putText(image, msg, (10, y_offset), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+            y_offset += 30
