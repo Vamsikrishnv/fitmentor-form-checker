@@ -143,22 +143,36 @@ async def get_exercise(exercise_id: int):
 @app.post("/api/analyze", response_model=AnalysisResponse, tags=["Analysis"])
 async def analyze_form(
     video: UploadFile = File(..., description="Video file to analyze"),
-    exercise: str = Form(..., description="Exercise type (squat, pushup, plank, etc.)")
+    exercise: str = Form(default="squat", description="Exercise type")
 ):
     """
     Analyze exercise form from uploaded video.
     
     - **video**: Video file (mp4, avi, mov)
-    - **exercise**: Exercise type (squat, pushup, plank, lunge, deadlift, overhead_press, row, shoulder_raise, bicep_curl, tricep_extension)
+    - **exercise**: Exercise type (default: squat)
+    
+    Valid exercises: squat, pushup, plank, lunge, deadlift, overhead_press, 
+                    row, shoulder_raise, bicep_curl, tricep_extension
     
     Returns form score, rep count, and feedback.
     """
     
-    # Validate file type
-    if not video.content_type.startswith('video/'):
+    print(f"📥 Received video: {video.filename}")
+    print(f"📝 Exercise type: {exercise}")
+    print(f"📦 Content type: {video.content_type}")
+    
+    # Validate file type (be more lenient)
+    valid_video_types = [
+        'video/mp4', 'video/avi', 'video/quicktime', 
+        'video/x-msvideo', 'video/x-matroska',
+        'application/octet-stream'  # Sometimes videos come as this
+    ]
+    
+    if video.content_type not in valid_video_types and not video.content_type.startswith('video/'):
+        print(f"❌ Invalid content type: {video.content_type}")
         raise HTTPException(
             status_code=400,
-            detail="File must be a video (mp4, avi, mov, etc.)"
+            detail=f"Invalid file type: {video.content_type}. Please upload a video file (mp4, avi, mov, etc.)"
         )
     
     # Validate exercise type
@@ -167,16 +181,28 @@ async def analyze_form(
         "overhead_press", "row", "shoulder_raise", "bicep_curl", "tricep_extension"
     ]
     
-    if exercise.lower() not in valid_exercises:
+    exercise_lower = exercise.lower()
+    
+    if exercise_lower not in valid_exercises:
+        print(f"❌ Invalid exercise: {exercise_lower}")
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid exercise type. Valid types: {', '.join(valid_exercises)}"
+            detail=f"Invalid exercise type: {exercise}. Valid types: {', '.join(valid_exercises)}"
         )
     
-    # Process video
-    result = await video_processor.analyze_video(video, exercise.lower())
+    print(f"✅ Starting analysis for {exercise_lower}...")
     
-    return result
+    # Process video
+    try:
+        result = await video_processor.analyze_video(video, exercise_lower)
+        print(f"✅ Analysis complete: {result['success']}")
+        return result
+    except Exception as e:
+        print(f"❌ Error during analysis: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error processing video: {str(e)}"
+        )
 
 
 if __name__ == "__main__":
