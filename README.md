@@ -206,3 +206,52 @@ Follow the journey: \[Your Twitter/X handle]
 
 \*\*Last Updated:\*\* November 5, 2025
 
+
+## 🔌 API Usage
+
+### Start the API Server
+```bash
+cd backend
+python main.py
+```
+
+Server runs on: `http://localhost:8000`
+
+### API Endpoints
+
+**Health Check:**
+```
+GET /api/health
+```
+
+**List All Exercises:**
+```
+GET /api/exercises
+```
+
+**Analyze Form (Upload Video):**
+```
+POST /api/analyze
+- Form data: video (file)
+- Form data: exercise (string)
+```
+
+### Interactive API Docs
+
+Visit `http://localhost:8000/docs` for interactive API documentation and testing!
+
+### Example API Response
+```json
+{
+  "success": true,
+  "exercise": "squat",
+  "form_score": 85,
+  "rep_count": 10,
+  "feedback": [
+    "✅ Good depth!",
+    "⚠️ Keep back straight"
+  ],
+  "message": "Analyzed 90 frames"
+}
+```
+
