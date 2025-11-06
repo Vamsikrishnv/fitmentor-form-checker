@@ -1,9 +1,41 @@
-
+# Python
 venv/
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Videos (too large)
 *.mp4
 *.avi
-.idea/
-.vscode/
+*.mov
+
+# Landing page
+landing/node_modules/
+landing/.next/
+landing/out/
+
+# Environment
+.env
+.env.local
+
+# Testing
+*.mp4
+test_videos/

@@ -204,6 +204,58 @@ async def analyze_form(
             detail=f"Error processing video: {str(e)}"
         )
 
+@app.get("/api/exercises/random", response_model=ExerciseInfo, tags=["Exercises"])
+async def get_random_exercise():
+    """Get a random exercise suggestion."""
+    import random
+    return random.choice(EXERCISES)
+
+
+@app.get("/api/exercises/difficulty/{difficulty}", response_model=List[ExerciseInfo], tags=["Exercises"])
+async def get_exercises_by_difficulty(difficulty: str):
+    """Get exercises by difficulty level (beginner, intermediate, advanced)."""
+    results = [ex for ex in EXERCISES if ex["difficulty"].lower() == difficulty.lower()]
+    
+    if not results:
+        raise HTTPException(status_code=404, detail=f"No exercises found for difficulty: {difficulty}")
+    
+    return results
+
+
+@app.get("/api/exercises/muscle/{muscle}", response_model=List[ExerciseInfo], tags=["Exercises"])
+async def get_exercises_by_muscle(muscle: str):
+    """Get exercises targeting a specific muscle group."""
+    results = [
+        ex for ex in EXERCISES 
+        if any(muscle.lower() in mg.lower() for mg in ex["muscle_groups"])
+    ]
+    
+    if not results:
+        raise HTTPException(status_code=404, detail=f"No exercises found for muscle: {muscle}")
+    
+    return results
+
+
+@app.post("/api/batch-analyze", tags=["Analysis"])
+async def batch_analyze(
+    videos: List[UploadFile] = File(...),
+    exercise: str = Form(default="squat")
+):
+    """Analyze multiple videos at once."""
+    results = []
+    
+    for video in videos:
+        result = await video_processor.analyze_video(video, exercise.lower())
+        results.append({
+            "filename": video.filename,
+            "result": result
+        })
+    
+    return {
+        "total_videos": len(videos),
+        "results": results
+    }
+
 
 if __name__ == "__main__":
     import uvicorn
