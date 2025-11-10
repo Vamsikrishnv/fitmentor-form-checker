@@ -1,4 +1,4 @@
-﻿FROM python:3.11-slim
+﻿FROM python:3.11-slim-bookworm
 
 WORKDIR /app
 
@@ -6,10 +6,10 @@ RUN apt-get update && apt-get install -y \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
-    libxrender-dev \
+    libxrender1 \
     libgomp1 \
     libgl1-mesa-glx \
-    && rm -rf /var/lib/apt/lists/*
+ && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
@@ -19,4 +19,5 @@ COPY . .
 
 EXPOSE 8000
 
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Use sh so  expands on Render/Railway; default to 8000 locally
+CMD ["sh","-c","uvicorn backend.main:app --host 0.0.0.0 --port "]
