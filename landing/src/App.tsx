@@ -8,8 +8,8 @@ function App() {
   const [error, setError] = useState('')
 
   // Use production API in production, localhost in dev
-  const API_URL = import.meta.env.PROD 
-    ? https://fitmentor-form-checker.onrender.com
+ const API_URL = import.meta.env.PROD 
+    ? 'https://fitmentor-form-checker.onrender.com'  // ✅ Added quotes!
     : 'http://localhost:8000'
 
   const handleSubmit = async (e: React.FormEvent) => {
