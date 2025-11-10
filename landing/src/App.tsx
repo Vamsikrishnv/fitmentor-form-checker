@@ -9,8 +9,8 @@ function App() {
 
   // Use production API in production, localhost in dev
   const API_URL = import.meta.env.PROD 
-    ? 'https://YOUR_RAILWAY_URL_HERE.up.railway.app'
-    : 'http://localhost:8000'
+  ? https://fitmentor-backend.onrender.com  // ← Your Render URL here
+  : 'http://localhost:8000'
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
