@@ -2,16 +2,49 @@ import { useState } from 'react'
 
 function App() {
   const [email, setEmail] = useState('')
+  const [name, setName] = useState('')
   const [submitted, setSubmitted] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log('Email:', email)
-    setSubmitted(true)
-    setTimeout(() => {
-      setSubmitted(false)
-      setEmail('')
-    }, 3000)
+    setLoading(true)
+    setError('')
+
+    try {
+      // Call our backend API (avoids CORS)
+      const response = await fetch('http://localhost:8000/api/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: email,
+          name: name,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        setSubmitted(true)
+        setEmail('')
+        setName('')
+        
+        // Reset after 5 seconds
+        setTimeout(() => {
+          setSubmitted(false)
+        }, 5000)
+      } else {
+        setError(data.detail || data.message || 'Something went wrong. Please try again.')
+      }
+    } catch (err) {
+      console.error('Signup error:', err)
+      setError('Failed to join waitlist. Make sure backend is running!')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -93,26 +126,48 @@ function App() {
             
             {!submitted ? (
               <form onSubmit={handleSubmit} className="max-w-md mx-auto">
-                <div className="flex flex-col sm:flex-row gap-4">
+                <div className="space-y-4">
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Your name"
+                    required
+                    className="w-full px-6 py-4 rounded-lg text-gray-900 text-lg"
+                  />
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="your.email@example.com"
                     required
-                    className="flex-1 px-6 py-4 rounded-lg text-gray-900 text-lg"
+                    className="w-full px-6 py-4 rounded-lg text-gray-900 text-lg"
                   />
+                  
+                  {error && (
+                    <div className="text-red-400 font-semibold bg-red-900/30 p-3 rounded">
+                      {error}
+                    </div>
+                  )}
+                  
                   <button
                     type="submit"
-                    className="px-8 py-4 bg-yellow-400 hover:bg-yellow-500 text-gray-900 font-bold rounded-lg text-lg transition"
+                    disabled={loading}
+                    className="w-full px-8 py-4 bg-yellow-400 hover:bg-yellow-500 text-gray-900 font-bold rounded-lg text-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Join Waitlist
+                    {loading ? 'Joining...' : 'Join Waitlist 🚀'}
                   </button>
                 </div>
               </form>
             ) : (
-              <div className="text-2xl text-green-400 font-bold">
-                ✅ You're on the list!
+              <div className="text-center p-6">
+                <div className="text-5xl mb-4">🎉</div>
+                <div className="text-3xl text-green-400 font-bold mb-2">
+                  You're on the list!
+                </div>
+                <p className="text-gray-300">
+                  Check your email for confirmation
+                </p>
               </div>
             )}
           </div>
