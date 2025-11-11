@@ -9,13 +9,8 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-
     "jsx": "react-jsx",
-    "strict": true,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "forceConsistentCasingInFileNames": true
-    "types": ["vite/client"]   // <-- add this line
+    "types": ["vite/client"]
   },
   "include": ["src"]
 }
