@@ -1,8 +1,8 @@
 # main.py
-# --- FASTAPI BACKEND (safe for uvicorn/Render) -------------------------------
 import os
 import cv2
 import math
+import time
 import tempfile
 import numpy as np
 import mediapipe as mp
@@ -11,7 +11,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
-# CORS: relax for local dev. You can restrict origins in production.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -21,7 +20,6 @@ app.add_middleware(
 
 mp_pose = mp.solutions.pose
 
-# ---- helpers ----------------------------------------------------------------
 def angle_3pts(a, b, c):
     """Return angle ABC in degrees given 3 points (x, y)."""
     a, b, c = np.array(a), np.array(b), np.array(c)
@@ -35,12 +33,6 @@ def lm_xy(landmarks, image_w, image_h, idx):
     return (lm.x * image_w, lm.y * image_h)
 
 class SquatCounter:
-    """
-    Tiny state machine to count squats via knee angle:
-    - 'down' when knee < 120°
-    - rep++ when returning 'up' (knee > 160°)
-    Tracks depth hits (< 70°) for scoring.
-    """
     def __init__(self):
         self.rep_count = 0
         self.state = "up"
@@ -50,15 +42,22 @@ class SquatCounter:
     def update(self, left_knee_angle, right_knee_angle):
         knee = min(left_knee_angle, right_knee_angle)
         self.min_knee_angle = min(self.min_knee_angle, knee)
+        
+        # Track if reached deep depth (below parallel)
         if knee < 70:
             self.reached_depth = True
 
         if self.state == "up":
-            if knee < 120:
+            # Must go to parallel or below (100° or less)
+            if knee < 100:
                 self.state = "down"
         else:  # down
+            # Standing back up
             if knee > 160:
-                self.rep_count += 1
+                # Only count rep if reached at least parallel depth
+                if self.min_knee_angle < 110:
+                    self.rep_count += 1
+                # Reset for next rep
                 self.state = "up"
                 self.min_knee_angle = 180.0
                 self.reached_depth = False
@@ -66,7 +65,6 @@ class SquatCounter:
         return knee
 
 def squat_metrics_from_landmarks(landmarks, img_w, img_h):
-    # MediaPipe indices
     L_HIP, L_KNEE, L_ANKLE = 24, 26, 28
     R_HIP, R_KNEE, R_ANKLE = 23, 25, 27
 
@@ -83,7 +81,6 @@ def squat_metrics_from_landmarks(landmarks, img_w, img_h):
     return left_knee, right_knee
 
 def score_squat(depth_hit, rep_count):
-    # Toy scoring: base + depth + reps (cap 10 reps)
     score = 0
     if rep_count > 0:
         score = 60
@@ -101,9 +98,9 @@ async def analyze_endpoint(
     video: UploadFile = File(...),
     exercise: str = Form("squat")
 ):
-    # Save upload to a temp file so OpenCV can read it
     suffix = os.path.splitext(video.filename or "")[-1] or ".mp4"
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    
     try:
         content = await video.read()
         tmp.write(content)
@@ -113,68 +110,112 @@ async def analyze_endpoint(
 
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
-            raise HTTPException(status_code=400, detail="Could not read the uploaded video.")
+            raise HTTPException(status_code=400, detail="Could not read video")
 
         frames_analyzed = 0
         feedback = []
 
         if exercise.lower() == "squat":
             counter = SquatCounter()
-            depth_hit_session = False
+            session_depth_hits = False
+            frames_analyzed = 0
+
+            MAX_SIDE = 960
+            STILL_SKIP = 3
+            MOTION_SKIP = 1
+            MOTION_THRESH = 8.0
+
+            def downscale_keep_aspect(img, max_side=MAX_SIDE):
+                h, w = img.shape[:2]
+                side = max(h, w)
+                if side <= max_side:
+                    return img
+                scale = max_side / side
+                new_w, new_h = int(w * scale), int(h * scale)
+                return cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+            def keypoints_xy(landmarks, w, h):
+                L_HIP, R_HIP, L_KNEE, R_KNEE = 24, 23, 26, 25
+                pts = []
+                for idx in (L_HIP, R_HIP, L_KNEE, R_KNEE):
+                    lm = landmarks[idx]
+                    pts.append((lm.x * w, lm.y * h))
+                return np.array(pts, dtype=np.float32)
+
+            cv2.ocl.setUseOpenCL(False)
 
             with mp_pose.Pose(
-                model_complexity=1,
+                model_complexity=2,
                 enable_segmentation=False,
+                smooth_landmarks=True,
                 min_detection_confidence=0.5,
                 min_tracking_confidence=0.5
             ) as pose:
+
                 i = 0
-                step = 2  # sample every 2nd frame for speed
+                skip_every = MOTION_SKIP
+                last_pts = None
+
                 while True:
                     ok, frame = cap.read()
                     if not ok:
                         break
                     i += 1
-                    if i % step != 0:
+
+                    if skip_every > 1 and (i % skip_every) != 0:
                         continue
 
-                    h, w = frame.shape[:2]
-                    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    frame_ds = downscale_keep_aspect(frame, MAX_SIDE)
+                    h, w = frame_ds.shape[:2]
+
+                    rgb = cv2.cvtColor(frame_ds, cv2.COLOR_BGR2RGB)
                     rgb.flags.writeable = False
                     res = pose.process(rgb)
 
                     if res.pose_landmarks:
+                        pts = keypoints_xy(res.pose_landmarks.landmark, w, h)
+                        if last_pts is not None:
+                            disp = np.linalg.norm(pts - last_pts, axis=1).mean()
+                        else:
+                            disp = MOTION_THRESH + 1.0
+                        last_pts = pts
+
+                        skip_every = MOTION_SKIP if disp >= MOTION_THRESH else STILL_SKIP
+
                         lka, rka = squat_metrics_from_landmarks(res.pose_landmarks.landmark, w, h)
                         knee = counter.update(lka, rka)
                         if knee < 70:
-                            depth_hit_session = True
-                    frames_analyzed += 1
+                            session_depth_hits = True
 
-            form_score = score_squat(depth_hit_session, counter.rep_count)
+                        frames_analyzed += 1
+                    else:
+                        skip_every = MOTION_SKIP
 
+            form_score = score_squat(session_depth_hits, counter.rep_count)
+
+            feedback = []
             if counter.rep_count == 0:
                 feedback.append("Try a full squat: descend until knee angle < 70°.")
-            elif not depth_hit_session:
+            elif not session_depth_hits:
                 feedback.append("Great effort. Aim for deeper range to improve form score.")
             if form_score >= 80:
                 feedback.append("Nice control and range. Keep your chest up and core tight.")
 
             cap.release()
             return {
-                "form_score": form_score,
-                "rep_count": counter.rep_count,
-                "frames_analyzed": frames_analyzed,
+                "form_score": int(form_score),
+                "rep_count": int(counter.rep_count),
+                "frames_analyzed": int(frames_analyzed),
                 "feedback": feedback or ["Analysis complete."],
             }
-
-        # Other exercises not implemented yet
-        cap.release()
-        return {
-            "form_score": 70,
-            "rep_count": 0,
-            "frames_analyzed": 0,
-            "feedback": [f"'{exercise}' analyzer not implemented yet — placeholder score."],
-        }
+        else:
+            cap.release()
+            return {
+                "form_score": 70,
+                "rep_count": 0,
+                "frames_analyzed": 0,
+                "feedback": [f"'{exercise}' analyzer not implemented yet."],
+            }
 
     finally:
         try:
@@ -183,12 +224,10 @@ async def analyze_endpoint(
             pass
 
 
-# --- CLI WEBCAM DEMO (runs ONLY when `python main.py`) -----------------------
 if __name__ == "__main__":
     import mediapipe as mp
     import cv2
 
-    # Move exercise analyzer imports here so uvicorn import won't require them
     from exercises.squat import SquatAnalyzer
     from exercises.pushup import PushupAnalyzer
     from exercises.plank import PlankAnalyzer
