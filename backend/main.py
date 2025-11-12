@@ -200,9 +200,12 @@ async def analyze_form(
     max_file_size_mb = int(os.getenv("MAX_FILE_SIZE_MB", "50"))
     max_duration_seconds = int(os.getenv("MAX_VIDEO_DURATION_SECONDS", "300"))
 
-    # Check file size (read first to get size)
-    video_content = await video.read()
-    file_size_mb = len(video_content) / (1024 * 1024)
+    # Check file size using seek instead of reading entire file into memory
+    # This prevents memory exhaustion on low-memory servers (e.g., Render free tier)
+    await video.seek(0, 2)  # Seek to end
+    file_size_bytes = await video.tell()  # Get position (file size)
+    await video.seek(0)  # Reset to beginning
+    file_size_mb = file_size_bytes / (1024 * 1024)
 
     if file_size_mb > max_file_size_mb:
         logger.warning(f"File too large: {file_size_mb:.2f}MB (max: {max_file_size_mb}MB) from file: {video.filename}")
@@ -247,12 +250,12 @@ async def analyze_form(
             detail=f"Invalid exercise type: {exercise}. Valid types: {', '.join(valid_exercises)}"
         )
 
-    logger.info(f"Starting analysis for {exercise_lower} on file: {video.filename}")
+    logger.info(f"Starting analysis for {exercise_lower} on file: {video.filename}, size: {file_size_mb:.1f}MB")
 
-    # Process video with duration limit
+    # Process video with streaming (memory-efficient)
     try:
-        result = await video_processor.analyze_video(
-            video_content,
+        result = await video_processor.analyze_video_stream(
+            video,
             exercise_lower,
             max_duration_seconds
         )

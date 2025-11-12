@@ -76,13 +76,17 @@ class VideoProcessor:
             return cv2.resize(frame, (new_width, new_height), interpolation=cv2.INTER_AREA)
 
         return frame
-    
-    async def analyze_video(self, video_content: bytes, exercise_type: str, max_duration: int = 300):
+
+    async def analyze_video_stream(self, video_file, exercise_type: str, max_duration: int = 300):
         """
-        Analyze a video file for exercise form with performance optimizations.
+        Analyze video using streaming to avoid memory exhaustion.
+
+        This method streams the uploaded file directly to disk in chunks
+        instead of loading it entirely into memory, making it suitable
+        for low-memory environments like Render's free tier (512MB).
 
         Args:
-            video_content: Video file content as bytes
+            video_file: FastAPI UploadFile object
             exercise_type: Type of exercise (squat, pushup, etc.)
             max_duration: Maximum video duration in seconds (default: 300)
 
@@ -102,17 +106,60 @@ class VideoProcessor:
                 "feedback": []
             }
 
-        # Save uploaded file temporarily
+        # Create temp file and stream upload in chunks (memory-efficient)
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
-        temp_file.write(video_content)
-        temp_file.close()
-        
+
+        try:
+            # Stream file in 8KB chunks instead of loading all at once
+            chunk_size = 8192
+            while chunk := await video_file.read(chunk_size):
+                temp_file.write(chunk)
+            temp_file.close()
+
+            logger.info(f"Video streamed to temp file: {temp_file.name}")
+
+            # Now process the video from disk (not from memory)
+            return await self._process_video_file(temp_file.name, exercise_type, max_duration, start_time)
+
+        except Exception as e:
+            logger.error(f"Error streaming video: {str(e)}", exc_info=True)
+            return {
+                "success": False,
+                "message": f"Error streaming video: {str(e)}",
+                "exercise": exercise_type,
+                "form_score": 0,
+                "rep_count": 0,
+                "feedback": []
+            }
+        finally:
+            # Clean up temp file
+            try:
+                if os.path.exists(temp_file.name):
+                    os.unlink(temp_file.name)
+                    logger.debug(f"Cleaned up temp file: {temp_file.name}")
+            except Exception as e:
+                logger.warning(f"Failed to clean up temp file {temp_file.name}: {str(e)}")
+
+    async def _process_video_file(self, video_path: str, exercise_type: str, max_duration: int, start_time: float):
+        """
+        Internal method to process video from file path.
+
+        Args:
+            video_path: Path to video file on disk
+            exercise_type: Type of exercise
+            max_duration: Max duration in seconds
+            start_time: Time when processing started
+
+        Returns:
+            dict: Analysis results
+        """
+
         try:
             # Initialize analyzer
             analyzer = self.ANALYZERS[exercise_type]()
-            
+
             # Process video
-            cap = cv2.VideoCapture(temp_file.name)
+            cap = cv2.VideoCapture(video_path)
 
             if not cap.isOpened():
                 return {
@@ -187,6 +234,9 @@ class VideoProcessor:
                         analyzer.analyze(results.pose_landmarks, image)
                         frames_analyzed += 1
 
+                        # Explicitly delete image to free memory
+                        del image
+
                     # Early termination for rep-based exercises if enough data collected
                     if (frames_analyzed >= self.min_frames_for_analysis and
                         hasattr(analyzer, 'rep_count') and
@@ -228,7 +278,51 @@ class VideoProcessor:
                 "rep_count": 0,
                 "feedback": []
             }
-        
+
+    async def analyze_video(self, video_content: bytes, exercise_type: str, max_duration: int = 300):
+        """
+        Legacy method - loads entire video into memory (not recommended for production).
+        Use analyze_video_stream() instead for memory efficiency.
+
+        Args:
+            video_content: Video file content as bytes
+            exercise_type: Type of exercise (squat, pushup, etc.)
+            max_duration: Maximum video duration in seconds (default: 300)
+
+        Returns:
+            dict: Analysis results
+        """
+
+        start_time = time.time()
+
+        if exercise_type not in self.ANALYZERS:
+            return {
+                "success": False,
+                "message": f"Unknown exercise type: {exercise_type}",
+                "exercise": exercise_type,
+                "form_score": 0,
+                "rep_count": 0,
+                "feedback": []
+            }
+
+        # Save uploaded file temporarily
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
+        temp_file.write(video_content)
+        temp_file.close()
+
+        try:
+            return await self._process_video_file(temp_file.name, exercise_type, max_duration, start_time)
+        except Exception as e:
+            logger.error(f"Error processing video: {str(e)}", exc_info=True)
+            return {
+                "success": False,
+                "message": f"Error processing video: {str(e)}",
+                "exercise": exercise_type,
+                "form_score": 0,
+                "rep_count": 0,
+                "feedback": []
+            }
+
         finally:
             # Clean up temp file
             try:
