@@ -104,6 +104,76 @@ EXERCISES = [
         "description": "Arm isolation exercise for triceps",
         "difficulty": "Beginner",
         "muscle_groups": ["Triceps"]
+    },
+    {
+        "id": 11,
+        "name": "Diamond Push-up",
+        "description": "Advanced push-up variation for tricep emphasis with close hand placement",
+        "difficulty": "Intermediate",
+        "muscle_groups": ["Triceps", "Chest", "Shoulders", "Core"]
+    },
+    {
+        "id": 12,
+        "name": "Dips",
+        "description": "Compound pushing exercise for chest and triceps",
+        "difficulty": "Intermediate",
+        "muscle_groups": ["Chest", "Triceps", "Shoulders"]
+    },
+    {
+        "id": 13,
+        "name": "Pike Push-up",
+        "description": "Shoulder-focused push-up variation with inverted V position",
+        "difficulty": "Intermediate",
+        "muscle_groups": ["Shoulders", "Triceps", "Core"]
+    },
+    {
+        "id": 14,
+        "name": "Pull-up",
+        "description": "Upper body compound pulling exercise for back and biceps",
+        "difficulty": "Intermediate",
+        "muscle_groups": ["Back", "Lats", "Biceps", "Forearms"]
+    },
+    {
+        "id": 15,
+        "name": "Face Pull",
+        "description": "Rear deltoid and upper back exercise for shoulder health",
+        "difficulty": "Beginner",
+        "muscle_groups": ["Rear Delts", "Upper Back", "Traps"]
+    },
+    {
+        "id": 16,
+        "name": "Lat Pulldown",
+        "description": "Lat-focused pulling exercise for back width",
+        "difficulty": "Beginner",
+        "muscle_groups": ["Lats", "Back", "Biceps"]
+    },
+    {
+        "id": 17,
+        "name": "Bulgarian Split Squat",
+        "description": "Unilateral leg exercise for balance and strength",
+        "difficulty": "Intermediate",
+        "muscle_groups": ["Quadriceps", "Glutes", "Hamstrings", "Core"]
+    },
+    {
+        "id": 18,
+        "name": "Calf Raise",
+        "description": "Lower leg isolation exercise for calf development",
+        "difficulty": "Beginner",
+        "muscle_groups": ["Calves", "Gastrocnemius", "Soleus"]
+    },
+    {
+        "id": 19,
+        "name": "Romanian Deadlift",
+        "description": "Hip hinge exercise emphasizing hamstrings and glutes",
+        "difficulty": "Intermediate",
+        "muscle_groups": ["Hamstrings", "Glutes", "Lower Back", "Core"]
+    },
+    {
+        "id": 20,
+        "name": "Side Plank",
+        "description": "Isometric core exercise for obliques and lateral stability",
+        "difficulty": "Beginner",
+        "muscle_groups": ["Obliques", "Core", "Shoulders"]
     }
 ]
 
@@ -156,8 +226,10 @@ async def analyze_form(
     - **video**: Video file (mp4, avi, mov)
     - **exercise**: Exercise type (default: squat)
     
-    Valid exercises: squat, pushup, plank, lunge, deadlift, overhead_press, 
-                    row, shoulder_raise, bicep_curl, tricep_extension
+    Valid exercises: squat, pushup, plank, lunge, deadlift, overhead_press,
+                    row, shoulder_raise, bicep_curl, tricep_extension, diamond_pushup,
+                    dips, pike_pushup, pullup, face_pull, lat_pulldown,
+                    bulgarian_split_squat, calf_raise, romanian_deadlift, side_plank
     
     Returns form score, rep count, and feedback.
     """
@@ -183,7 +255,9 @@ async def analyze_form(
     # Validate exercise type
     valid_exercises = [
         "squat", "pushup", "plank", "lunge", "deadlift",
-        "overhead_press", "row", "shoulder_raise", "bicep_curl", "tricep_extension"
+        "overhead_press", "row", "shoulder_raise", "bicep_curl", "tricep_extension",
+        "diamond_pushup", "dips", "pike_pushup", "pullup", "face_pull",
+        "lat_pulldown", "bulgarian_split_squat", "calf_raise", "romanian_deadlift", "side_plank"
     ]
     
     exercise_lower = exercise.lower()

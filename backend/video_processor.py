@@ -17,6 +17,16 @@ from exercises.row import RowAnalyzer
 from exercises.shoulder_raise import ShoulderRaiseAnalyzer
 from exercises.bicep_curl import BicepCurlAnalyzer
 from exercises.tricep_extension import TricepExtensionAnalyzer
+from exercises.diamond_pushup import DiamondPushupAnalyzer
+from exercises.dips import DipsAnalyzer
+from exercises.pike_pushup import PikePushupAnalyzer
+from exercises.pullup import PullupAnalyzer
+from exercises.face_pull import FacePullAnalyzer
+from exercises.lat_pulldown import LatPulldownAnalyzer
+from exercises.bulgarian_split_squat import BulgarianSplitSquatAnalyzer
+from exercises.calf_raise import CalfRaiseAnalyzer
+from exercises.romanian_deadlift import RomanianDeadliftAnalyzer
+from exercises.side_plank import SidePlankAnalyzer
 
 
 class VideoProcessor:
@@ -30,7 +40,17 @@ class VideoProcessor:
         "row": RowAnalyzer,
         "shoulder_raise": ShoulderRaiseAnalyzer,
         "bicep_curl": BicepCurlAnalyzer,
-        "tricep_extension": TricepExtensionAnalyzer
+        "tricep_extension": TricepExtensionAnalyzer,
+        "diamond_pushup": DiamondPushupAnalyzer,
+        "dips": DipsAnalyzer,
+        "pike_pushup": PikePushupAnalyzer,
+        "pullup": PullupAnalyzer,
+        "face_pull": FacePullAnalyzer,
+        "lat_pulldown": LatPulldownAnalyzer,
+        "bulgarian_split_squat": BulgarianSplitSquatAnalyzer,
+        "calf_raise": CalfRaiseAnalyzer,
+        "romanian_deadlift": RomanianDeadliftAnalyzer,
+        "side_plank": SidePlankAnalyzer
     }
     
     def __init__(self):
