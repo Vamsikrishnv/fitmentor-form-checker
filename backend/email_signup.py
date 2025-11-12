@@ -16,9 +16,15 @@ async def signup_to_waitlist(data: SignupRequest):
     Add user to EmailOctopus waitlist.
     This endpoint acts as a proxy to avoid CORS issues.
     """
-    
-    API_KEY = "eo_53c879a8ee2a60099aa196918293b248ec2ac8694f1729a2072527a89c0434ba"
-    LIST_ID = "20d21a5e-bdda-11f0-992a-33a7328164cd"
+
+    API_KEY = os.getenv("EMAIL_OCTOPUS_API_KEY")
+    LIST_ID = os.getenv("EMAIL_OCTOPUS_LIST_ID")
+
+    if not API_KEY or not LIST_ID:
+        raise HTTPException(
+            status_code=500,
+            detail="Email service configuration missing. Please contact administrator."
+        )
     
     try:
         response = requests.post(

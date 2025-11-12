@@ -1,15 +1,36 @@
 # backend/main.py
+# ==============================================================================
+# PRODUCTION API ENTRY POINT
+# ==============================================================================
+# This is the main production API with:
+# - Security: Environment-based configuration, CORS restrictions, file limits
+# - Logging: Structured logging throughout
+# - Features: 10 exercise analyzers with angle smoothing and rep counting
+# - Error Handling: Comprehensive error handling and validation
+#
+# To run:
+#   uvicorn backend.main:app --host 0.0.0.0 --port 8000
+#
+# For CLI demos: Use `python main.py` (root level) instead
+# ==============================================================================
+
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List
 import sys
 import os
+import logging
 from backend.email_signup import router as signup_router
+from backend.logging_config import setup_logging
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.models import AnalysisResponse, ExerciseInfo, HealthResponse
 from backend.video_processor import VideoProcessor
+
+# Setup logging
+logger = setup_logging()
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="FitMentor AI API",
@@ -17,13 +38,24 @@ app = FastAPI(
     version="0.2.0"
 )
 
-# Enable CORS
+# Configure CORS with environment variable or secure defaults
+allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
+if allowed_origins_env:
+    allowed_origins = [origin.strip() for origin in allowed_origins_env.split(",")]
+else:
+    # Secure defaults - restrict to known origins only
+    allowed_origins = [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "https://fitmentor-form-checker.onrender.com",
+    ]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify actual origins
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 
@@ -152,29 +184,49 @@ async def analyze_form(
 ):
     """
     Analyze exercise form from uploaded video.
-    
+
     - **video**: Video file (mp4, avi, mov)
     - **exercise**: Exercise type (default: squat)
-    
-    Valid exercises: squat, pushup, plank, lunge, deadlift, overhead_press, 
+
+    Valid exercises: squat, pushup, plank, lunge, deadlift, overhead_press,
                     row, shoulder_raise, bicep_curl, tricep_extension
-    
+
     Returns form score, rep count, and feedback.
     """
-    
-    print(f"📥 Received video: {video.filename}")
-    print(f"📝 Exercise type: {exercise}")
-    print(f"📦 Content type: {video.content_type}")
-    
-    # Validate file type (be more lenient)
+
+    logger.info(f"Received video upload: {video.filename}, exercise: {exercise}, content_type: {video.content_type}")
+
+    # Get file size limits from environment
+    max_file_size_mb = int(os.getenv("MAX_FILE_SIZE_MB", "50"))
+    max_duration_seconds = int(os.getenv("MAX_VIDEO_DURATION_SECONDS", "300"))
+
+    # Check file size (read first to get size)
+    video_content = await video.read()
+    file_size_mb = len(video_content) / (1024 * 1024)
+
+    if file_size_mb > max_file_size_mb:
+        logger.warning(f"File too large: {file_size_mb:.2f}MB (max: {max_file_size_mb}MB) from file: {video.filename}")
+        raise HTTPException(
+            status_code=413,
+            detail=f"File size ({file_size_mb:.1f}MB) exceeds maximum allowed size ({max_file_size_mb}MB)"
+        )
+
+    # Validate file type - strict validation
     valid_video_types = [
-        'video/mp4', 'video/avi', 'video/quicktime', 
-        'video/x-msvideo', 'video/x-matroska',
-        'application/octet-stream'  # Sometimes videos come as this
+        'video/mp4', 'video/avi', 'video/quicktime',
+        'video/x-msvideo', 'video/x-matroska', 'video/webm'
     ]
-    
-    if video.content_type not in valid_video_types and not video.content_type.startswith('video/'):
-        print(f"❌ Invalid content type: {video.content_type}")
+
+    # Allow application/octet-stream only if filename has video extension
+    if video.content_type == 'application/octet-stream':
+        if video.filename and not any(video.filename.lower().endswith(ext) for ext in ['.mp4', '.avi', '.mov', '.mkv', '.webm']):
+            logger.warning(f"Invalid file extension for octet-stream: {video.filename}")
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid file. Please upload a video file (mp4, avi, mov, mkv, webm)"
+            )
+    elif video.content_type not in valid_video_types and not video.content_type.startswith('video/'):
+        logger.warning(f"Invalid content type: {video.content_type} for file: {video.filename}")
         raise HTTPException(
             status_code=400,
             detail=f"Invalid file type: {video.content_type}. Please upload a video file (mp4, avi, mov, etc.)"
@@ -187,23 +239,27 @@ async def analyze_form(
     ]
     
     exercise_lower = exercise.lower()
-    
+
     if exercise_lower not in valid_exercises:
-        print(f"❌ Invalid exercise: {exercise_lower}")
+        logger.warning(f"Invalid exercise type requested: {exercise_lower}")
         raise HTTPException(
             status_code=400,
             detail=f"Invalid exercise type: {exercise}. Valid types: {', '.join(valid_exercises)}"
         )
-    
-    print(f"✅ Starting analysis for {exercise_lower}...")
-    
-    # Process video
+
+    logger.info(f"Starting analysis for {exercise_lower} on file: {video.filename}")
+
+    # Process video with duration limit
     try:
-        result = await video_processor.analyze_video(video, exercise_lower)
-        print(f"✅ Analysis complete: {result['success']}")
+        result = await video_processor.analyze_video(
+            video_content,
+            exercise_lower,
+            max_duration_seconds
+        )
+        logger.info(f"Analysis complete for {exercise_lower}: success={result['success']}, score={result.get('form_score', 'N/A')}, reps={result.get('rep_count', 'N/A')}")
         return result
     except Exception as e:
-        print(f"❌ Error during analysis: {str(e)}")
+        logger.error(f"Error during video analysis: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Error processing video: {str(e)}"

@@ -1,4 +1,17 @@
 # main.py
+# ==============================================================================
+# LEGACY/SIMPLIFIED ENTRY POINT
+# ==============================================================================
+# This file serves two purposes:
+# 1. Legacy API endpoint for simple deployments (basic squat analysis only)
+# 2. CLI webcam demo when run with `python main.py`
+#
+# FOR PRODUCTION: Use backend/main.py instead (more features, security, logging)
+# Command: uvicorn backend.main:app --host 0.0.0.0 --port 8000
+#
+# This file is kept for backward compatibility and local CLI demos.
+# ==============================================================================
+
 # --- FASTAPI BACKEND (safe for uvicorn/Render) -------------------------------
 import os
 import cv2

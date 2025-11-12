@@ -1,5 +1,28 @@
 import { useState } from 'react'
 
+// TypeScript interfaces for API responses
+interface AnalysisResult {
+  success: boolean
+  message?: string
+  exercise: string
+  form_score: number
+  rep_count: number
+  feedback: string[]
+  frames_processed?: number
+  frames_analyzed?: number
+  hold_time?: number
+}
+
+interface SignupResponse {
+  success: boolean
+  message: string
+}
+
+interface ErrorResponse {
+  detail?: string
+  message?: string
+}
+
 function App() {
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
@@ -9,7 +32,7 @@ function App() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [exercise, setExercise] = useState('squat')
   const [analyzing, setAnalyzing] = useState(false)
-  const [analysisResult, setAnalysisResult] = useState<any>(null)
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null)
 
   // Use Render URL in prod, localhost in dev
   const API_URL = import.meta.env.PROD
@@ -29,15 +52,18 @@ function App() {
         body: JSON.stringify({ email, name }),
       })
 
-      const data = await response.json()
+      const data: SignupResponse | ErrorResponse = await response.json()
 
-      if (response.ok) {
+      if (response.ok && 'success' in data && data.success) {
         setSubmitted(true)
         setEmail('')
         setName('')
         setTimeout(() => setSubmitted(false), 5000)
       } else {
-        setError(data.detail || data.message || 'Something went wrong.')
+        const errorMsg = ('detail' in data && data.detail) ||
+                        ('message' in data && data.message) ||
+                        'Something went wrong.'
+        setError(errorMsg)
       }
     } catch (err) {
       console.error('Signup error:', err)
@@ -68,13 +94,21 @@ function App() {
       if (!response.ok) {
         let message = 'Analysis failed'
         try {
-          const errJson = await response.json()
+          const errJson: ErrorResponse = await response.json()
           message = errJson.detail || errJson.message || message
-        } catch {}
+        } catch {
+          // If JSON parsing fails, use default message
+        }
         throw new Error(message)
       }
 
-      const result = await response.json()
+      const result: AnalysisResult = await response.json()
+
+      // Validate the response structure
+      if (!result.success) {
+        throw new Error(result.message || 'Analysis was not successful')
+      }
+
       setAnalysisResult(result)
     } catch (err) {
       console.error('Analyze error:', err)

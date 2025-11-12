@@ -4,9 +4,12 @@ import mediapipe as mp
 import tempfile
 import os
 import sys
+import logging
 
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+logger = logging.getLogger(__name__)
 
 from exercises.squat import SquatAnalyzer
 from exercises.pushup import PushupAnalyzer
@@ -40,18 +43,19 @@ class VideoProcessor:
         self.mp_pose = mp.solutions.pose
         self.mp_drawing = mp.solutions.drawing_utils
     
-    async def analyze_video(self, video_file, exercise_type: str):
+    async def analyze_video(self, video_content: bytes, exercise_type: str, max_duration: int = 300):
         """
         Analyze a video file for exercise form.
-        
+
         Args:
-            video_file: Uploaded video file
+            video_content: Video file content as bytes
             exercise_type: Type of exercise (squat, pushup, etc.)
-            
+            max_duration: Maximum video duration in seconds (default: 300)
+
         Returns:
             dict: Analysis results
         """
-        
+
         if exercise_type not in self.ANALYZERS:
             return {
                 "success": False,
@@ -61,10 +65,10 @@ class VideoProcessor:
                 "rep_count": 0,
                 "feedback": []
             }
-        
+
         # Save uploaded file temporarily
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
-        temp_file.write(await video_file.read())
+        temp_file.write(video_content)
         temp_file.close()
         
         try:
@@ -73,7 +77,7 @@ class VideoProcessor:
             
             # Process video
             cap = cv2.VideoCapture(temp_file.name)
-            
+
             if not cap.isOpened():
                 return {
                     "success": False,
@@ -83,7 +87,26 @@ class VideoProcessor:
                     "rep_count": 0,
                     "feedback": []
                 }
-            
+
+            # Check video duration
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            duration = total_frames / fps if fps > 0 else 0
+
+            logger.info(f"Video stats: duration={duration:.1f}s, fps={fps}, frames={total_frames}")
+
+            if duration > max_duration:
+                cap.release()
+                logger.warning(f"Video duration {duration:.1f}s exceeds max {max_duration}s")
+                return {
+                    "success": False,
+                    "message": f"Video duration ({duration:.1f}s) exceeds maximum allowed ({max_duration}s)",
+                    "exercise": exercise_type,
+                    "form_score": 0,
+                    "rep_count": 0,
+                    "feedback": []
+                }
+
             frame_count = 0
             frames_analyzed = 0
             
@@ -118,7 +141,9 @@ class VideoProcessor:
                         frames_analyzed += 1
             
             cap.release()
-            
+
+            logger.info(f"Video processing complete: {frames_analyzed}/{frame_count} frames analyzed")
+
             # Return results
             response = {
                 "success": True,
@@ -130,14 +155,15 @@ class VideoProcessor:
                 "frames_processed": frame_count,
                 "frames_analyzed": frames_analyzed
             }
-            
+
             # Add hold time for plank
             if hasattr(analyzer, 'hold_time'):
                 response['hold_time'] = analyzer.hold_time
-            
+
             return response
-            
+
         except Exception as e:
+            logger.error(f"Error processing video for {exercise_type}: {str(e)}", exc_info=True)
             return {
                 "success": False,
                 "message": f"Error processing video: {str(e)}",
@@ -150,6 +176,9 @@ class VideoProcessor:
         finally:
             # Clean up temp file
             try:
-                os.unlink(temp_file.name)
-            except:
-                pass
+                if os.path.exists(temp_file.name):
+                    os.unlink(temp_file.name)
+                    logger.debug(f"Cleaned up temp file: {temp_file.name}")
+            except Exception as e:
+                # Log but don't raise - cleanup failure shouldn't break the response
+                logger.warning(f"Failed to clean up temp file {temp_file.name}: {str(e)}")
