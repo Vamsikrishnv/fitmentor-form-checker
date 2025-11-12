@@ -39,3 +39,4 @@ landing/out/
 # Testing
 *.mp4
 test_videos/
+.vercel
