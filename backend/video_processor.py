@@ -1,11 +1,10 @@
 # backend/video_processor.py
-import cv2
-import mediapipe as mp
 import tempfile
 import os
 import sys
+import cv2
+import mediapipe as mp
 
-# Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from exercises.squat import SquatAnalyzer
@@ -21,8 +20,6 @@ from exercises.tricep_extension import TricepExtensionAnalyzer
 
 
 class VideoProcessor:
-    """Process uploaded videos and analyze exercise form."""
-    
     ANALYZERS = {
         "squat": SquatAnalyzer,
         "pushup": PushupAnalyzer,
@@ -38,20 +35,8 @@ class VideoProcessor:
     
     def __init__(self):
         self.mp_pose = mp.solutions.pose
-        self.mp_drawing = mp.solutions.drawing_utils
     
     async def analyze_video(self, video_file, exercise_type: str):
-        """
-        Analyze a video file for exercise form.
-        
-        Args:
-            video_file: Uploaded video file
-            exercise_type: Type of exercise (squat, pushup, etc.)
-            
-        Returns:
-            dict: Analysis results
-        """
-        
         if exercise_type not in self.ANALYZERS:
             return {
                 "success": False,
@@ -68,10 +53,7 @@ class VideoProcessor:
         temp_file.close()
         
         try:
-            # Initialize analyzer
             analyzer = self.ANALYZERS[exercise_type]()
-            
-            # Process video
             cap = cv2.VideoCapture(temp_file.name)
             
             if not cap.isOpened():
@@ -84,14 +66,19 @@ class VideoProcessor:
                     "feedback": []
                 }
             
+            # 🚀 OPTIMIZATION: Limit frames
             frame_count = 0
             frames_analyzed = 0
+            MAX_FRAMES = 200  # Only analyze 200 frames
+            SKIP_FRAMES = 6    # Process every 6th frame
             
             with self.mp_pose.Pose(
                 min_detection_confidence=0.5,
-                min_tracking_confidence=0.5) as pose:
+                min_tracking_confidence=0.5,
+                model_complexity=0  # 🚀 Use lightweight model
+            ) as pose:
                 
-                while cap.isOpened():
+                while cap.isOpened() and frames_analyzed < MAX_FRAMES:
                     ret, frame = cap.read()
                     
                     if not ret:
@@ -99,19 +86,21 @@ class VideoProcessor:
                     
                     frame_count += 1
                     
-                    # Process every 3rd frame (optimization)
-                    if frame_count % 3 != 0:
+                    # 🚀 Skip frames for speed
+                    if frame_count % SKIP_FRAMES != 0:
                         continue
                     
+                    # 🚀 Resize frame for faster processing
+                    small_frame = cv2.resize(frame, (640, 480))
+                    
                     # Convert to RGB
-                    image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    image = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
                     image.flags.writeable = False
                     
                     # Process pose
                     results = pose.process(image)
                     
                     if results.pose_landmarks:
-                        # Analyze form
                         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
                         image.flags.writeable = True
                         analyzer.analyze(results.pose_landmarks, image)
@@ -119,7 +108,6 @@ class VideoProcessor:
             
             cap.release()
             
-            # Return results
             response = {
                 "success": True,
                 "message": f"Analyzed {frames_analyzed} frames",
@@ -131,7 +119,6 @@ class VideoProcessor:
                 "frames_analyzed": frames_analyzed
             }
             
-            # Add hold time for plank
             if hasattr(analyzer, 'hold_time'):
                 response['hold_time'] = analyzer.hold_time
             
@@ -140,7 +127,7 @@ class VideoProcessor:
         except Exception as e:
             return {
                 "success": False,
-                "message": f"Error processing video: {str(e)}",
+                "message": f"Error: {str(e)}",
                 "exercise": exercise_type,
                 "form_score": 0,
                 "rep_count": 0,
@@ -148,7 +135,6 @@ class VideoProcessor:
             }
         
         finally:
-            # Clean up temp file
             try:
                 os.unlink(temp_file.name)
             except:
