@@ -12,9 +12,11 @@ function App() {
   const [analysisResult, setAnalysisResult] = useState<any>(null)
 
   // Use Render URL in prod, localhost in dev
-  const API_URL = import.meta.env.PROD
-    ? 'https://fitmentor-form-checker.onrender.com'
-    : 'http://localhost:8000'
+  const isProd = (import.meta as any).env?.PROD ?? false;
+const API_URL = isProd
+  ? 'https://fitmentor-form-checker.onrender.com'
+  : 'http://localhost:8000';
+
 
   // Join waitlist submit
   const handleSubmit = async (e: React.FormEvent) => {
@@ -84,10 +86,19 @@ function App() {
     }
   }
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) setSelectedFile(file)
+const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  const MAX_MB = 25;
+  if (file.size > MAX_MB * 1024 * 1024) {
+    setError(`Video too large. Please upload ≤ ${MAX_MB}MB.`);
+    setSelectedFile(null);
+    return;
   }
+  setError('');
+  setSelectedFile(file);
+};
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900">
@@ -208,13 +219,14 @@ function App() {
                         </div>
 
                         <button
-                          type="button"
-                          onClick={handleAnalyze}
-                          disabled={analyzing || !selectedFile}
-                          className="w-full px-6 py-4 bg-green-500 text-white font-bold rounded-lg hover:bg-green-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {analyzing ? '🔄 Analyzing...' : 'Analyze Form →'}
-                        </button>
+                            type="button"
+                            onClick={handleAnalyze}
+                            disabled={analyzing || !selectedFile}
+                            className="w-full px-6 py-4 bg-green-500 text-white font-bold rounded-lg hover:bg-green-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+>
+                          {analyzing ? '🔄 Analyzing… (this may take a moment)' : 'Analyze Form →'}
+                          </button>
+
                       </div>
                     </>
                   )}
@@ -233,8 +245,8 @@ function App() {
               {/* Supported exercises */}
               <div className="mt-8">
                 <p className="text-gray-400 text-sm text-center mb-4">Supported exercises:</p>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                  {['🏋️ Squat', '💪 Push-up', '🤸 Plank', '🦵 Lunge', '🏃 Deadlift'].map((labelTxt) => (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                  {['🏋️ Squat', '💪 Push-up', '🤸 Plank', '🦵 Lunge', '🏃 Deadlift', '🏋️ Overhead Press', '🚣 Row', '💪 Shoulder Raise', '💪 Bicep Curl', '💪 Tricep Extension'].map((labelTxt) => (
                     <div
                       key={labelTxt}
                       className="bg-white/5 hover:bg-white/10 rounded-lg p-3 text-center transition cursor-pointer border border-white/10"
@@ -243,7 +255,7 @@ function App() {
                     </div>
                   ))}
                 </div>
-                <p className="text-center text-gray-400 text-sm mt-4">+ 5 more exercises</p>
+                
               </div>
 
               {/* Results Display */}
