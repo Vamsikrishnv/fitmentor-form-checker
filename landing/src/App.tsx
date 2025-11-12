@@ -12,11 +12,14 @@ function App() {
   const [analyzing, setAnalyzing] = useState(false)
   const [analysisResult, setAnalysisResult] = useState<any>(null)
 
-  // Use Render URL in prod, localhost in dev
-  const isProd = (import.meta as any).env?.PROD ?? false;
-  const API_URL = isProd
-    ? 'https://fitmentor-form-checker.onrender.com'
-    : 'http://localhost:8000';
+  // Use explicit VITE_API_URL or fallback to auto-detection
+  const API_URL =
+    (import.meta as any).env?.VITE_API_URL ??
+    ((import.meta as any).env?.PROD ? 'https://fitmentor-form-checker.onrender.com'
+                                    : 'http://localhost:8000');
+
+  // Debug: log the API URL being used
+  console.log("API_URL →", API_URL);
 
   // Join waitlist submit
   const handleSubmit = async (e: React.FormEvent) => {
@@ -25,25 +28,34 @@ function App() {
     setError('')
 
     try {
-      const response = await fetch(`${API_URL}/api/signup`, {
+      const res = await fetch(`${API_URL}/api/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, name }),
       })
 
-      const data = await response.json()
+      // Try to parse JSON if possible; otherwise read text
+      const contentType = res.headers.get('content-type') || '';
+      const payload = contentType.includes('application/json')
+        ? await res.json()
+        : { message: await res.text() };
 
-      if (response.ok) {
-        setSubmitted(true)
-        setEmail('')
-        setName('')
-        setTimeout(() => setSubmitted(false), 5000)
-      } else {
-        setError(data.detail || data.message || 'Something went wrong.')
+      if (!res.ok) {
+        setError(
+          (payload as any).detail ||
+          (payload as any).message ||
+          `Signup failed (HTTP ${res.status})`
+        );
+        return;
       }
+
+      setSubmitted(true)
+      setEmail('')
+      setName('')
+      setTimeout(() => setSubmitted(false), 5000)
     } catch (err) {
       console.error('Signup error:', err)
-      setError('Failed to join waitlist. Please try again.')
+      setError('Failed to join waitlist. Network or CORS issue.')
     } finally {
       setLoading(false)
     }
