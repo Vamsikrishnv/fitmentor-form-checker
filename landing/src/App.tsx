@@ -11,6 +11,7 @@ interface AnalysisResult {
   frames_processed?: number
   frames_analyzed?: number
   hold_time?: number
+  processing_time_seconds?: number
 }
 
 interface SignupResponse {
@@ -309,7 +310,7 @@ function App() {
                   </div>
 
                   {/* Stats Grid */}
-                  <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div className="grid grid-cols-3 gap-4 mb-6">
                     <div className="bg-white/5 rounded-xl p-4 text-center">
                       <div className="text-3xl font-bold text-yellow-400">{analysisResult.rep_count ?? '--'}</div>
                       <div className="text-gray-300 text-sm">Reps Counted</div>
@@ -317,6 +318,12 @@ function App() {
                     <div className="bg-white/5 rounded-xl p-4 text-center">
                       <div className="text-3xl font-bold text-blue-400">{analysisResult.frames_analyzed ?? '--'}</div>
                       <div className="text-gray-300 text-sm">Frames Analyzed</div>
+                    </div>
+                    <div className="bg-white/5 rounded-xl p-4 text-center">
+                      <div className="text-3xl font-bold text-green-400">
+                        {analysisResult.processing_time_seconds ? `${analysisResult.processing_time_seconds}s` : '--'}
+                      </div>
+                      <div className="text-gray-300 text-sm">Processing Time</div>
                     </div>
                   </div>
 
