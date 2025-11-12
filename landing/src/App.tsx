@@ -7,6 +7,7 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [fileError, setFileError] = useState('')
   const [exercise, setExercise] = useState('squat')
   const [analyzing, setAnalyzing] = useState(false)
   const [analysisResult, setAnalysisResult] = useState<any>(null)
@@ -87,18 +88,23 @@ const API_URL = isProd
   }
 
 const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-  const file = e.target.files?.[0];
-  if (!file) return;
-
-  const MAX_MB = 25;
-  if (file.size > MAX_MB * 1024 * 1024) {
-    setError(`Video too large. Please upload ≤ ${MAX_MB}MB.`);
-    setSelectedFile(null);
-    return;
+  if (e.target.files && e.target.files[0]) {
+    const file = e.target.files[0]
+    const fileSizeMB = file.size / (1024 * 1024) // Convert bytes to MB
+    
+    // Check if file is larger than 25MB
+    if (fileSizeMB > 25) {
+      alert('⚠️ File too large! Please upload a video under 25MB.')
+      // Clear the file input
+      e.target.value = ''
+      setSelectedFile(null)
+      return
+    }
+    
+    // File is valid
+    setSelectedFile(file)
   }
-  setError('');
-  setSelectedFile(file);
-};
+}
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900">
@@ -241,6 +247,15 @@ const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
                 className="hidden"
                 onChange={handleFileChange}
               />
+
+
+               {fileError && (
+  					 <div className="mt-4 p-4 bg-red-500/20 border border-red-500 rounded-xl">
+    						<p className="text-red-400 text-center font-semibold">
+      							⚠️ {fileError}
+  					  </p>
+  					</div>
+	       )}
 
               {/* Supported exercises */}
               <div className="mt-8">
