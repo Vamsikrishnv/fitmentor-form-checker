@@ -10,19 +10,21 @@ from utils.angle_calculator import calculate_angle, get_landmark_coords
 
 class PushupAnalyzer:
     """Advanced push-up analyzer with precise alignment checks."""
-    
+
     def __init__(self):
         self.form_score = 100
+        self.frame_scores = []
+        self.feedback_counts = {}
         self.feedback = []
         self.rep_count = 0
         self.is_down = False
         self.in_pushup_position = False
         self.alignment_warnings = 0
-        
+
     def analyze(self, landmarks, image):
         """Analyze push-up form with strict alignment checks."""
-        self.form_score = 100
-        self.feedback = []
+        frame_score = 100
+        frame_feedback = []
         
         try:
             # Get all key landmarks
@@ -41,26 +43,40 @@ class PushupAnalyzer:
             
             # Check position
             self._check_position(shoulder, hip, ankle, nose)
-            
+
             if self.in_pushup_position:
                 # STRICT CHECKS
-                self._check_elbow_angle(elbow_angle, elbow, shoulder)
-                self._check_body_alignment(body_angle, shoulder_hip_knee)
-                self._check_head_position(nose, shoulder)
-                self._check_hand_placement(wrist, shoulder)
-                
+                frame_score = self._check_elbow_angle(elbow_angle, elbow, shoulder, frame_score, frame_feedback)
+                frame_score = self._check_body_alignment(body_angle, shoulder_hip_knee, frame_score, frame_feedback)
+                frame_score = self._check_head_position(nose, shoulder, frame_score, frame_feedback)
+                frame_score = self._check_hand_placement(wrist, shoulder, frame_score, frame_feedback)
+
                 # Rep counting
                 self._count_reps(elbow_angle)
-                
+
                 # Draw visuals
                 self._draw_angle(image, elbow, elbow_angle, "Elbow")
             else:
-                self.feedback.append("⚠️ Get in push-up position")
-            
+                frame_feedback.append("⚠️ Get in push-up position")
+
+            # Store frame score
+            self.frame_scores.append(max(0, frame_score))
+
+            # Accumulate feedback
+            for msg in frame_feedback:
+                self.feedback_counts[msg] = self.feedback_counts.get(msg, 0) + 1
+
+            # Calculate average score
+            self.form_score = int(sum(self.frame_scores) / len(self.frame_scores))
+
+            # Get most common feedback
+            sorted_feedback = sorted(self.feedback_counts.items(), key=lambda x: x[1], reverse=True)
+            self.feedback = [msg for msg, count in sorted_feedback[:4]]
+
             self._draw_form_score(image)
-            
+
         except Exception as e:
-            self.feedback.append(f"Error: {str(e)}")
+            frame_feedback.append(f"Error: {str(e)}")
             
         return image
     
@@ -76,71 +92,79 @@ class PushupAnalyzer:
             self.in_pushup_position = False
             self.is_down = False
     
-    def _check_elbow_angle(self, elbow_angle, elbow, shoulder):
+    def _check_elbow_angle(self, elbow_angle, elbow, shoulder, frame_score, frame_feedback):
         """Strict elbow depth and flare check."""
         # Check depth
         if elbow_angle > 160:
-            self.feedback.append("❌ Not low enough - go deeper")
-            self.form_score -= 30
+            frame_feedback.append("❌ Not low enough - go deeper")
+            frame_score -= 30
         elif elbow_angle > 140:
-            self.feedback.append("⚠️ Shallow push-up")
-            self.form_score -= 20
+            frame_feedback.append("⚠️ Shallow push-up")
+            frame_score -= 20
         elif 75 <= elbow_angle <= 95:
-            self.feedback.append("✓✓ Perfect depth (90°)")
+            frame_feedback.append("✓✓ Perfect depth (90°)")
         elif elbow_angle < 70:
-            self.feedback.append("⚠️ Too low - chest hitting ground")
-            self.form_score -= 10
+            frame_feedback.append("⚠️ Too low - chest hitting ground")
+            frame_score -= 10
         else:
-            self.feedback.append("✓ Good depth")
-        
+            frame_feedback.append("✓ Good depth")
+
         # Check elbow flare (should be ~45° from body, not 90°)
         elbow_shoulder_diff = abs(elbow[0] - shoulder[0])
         if elbow_shoulder_diff > 0.25:
-            self.feedback.append("⚠️ Elbows flaring out too much")
-            self.form_score -= 15
+            frame_feedback.append("⚠️ Elbows flaring out too much")
+            frame_score -= 15
+
+        return frame_score
     
-    def _check_body_alignment(self, body_angle, shoulder_hip_knee):
+    def _check_body_alignment(self, body_angle, shoulder_hip_knee, frame_score, frame_feedback):
         """Check if body is straight line (no sagging or piking)."""
         # Body should be straight (angle ~160-180°)
         if body_angle < 155:
-            self.feedback.append("❌ HIPS SAGGING - engage core!")
-            self.form_score -= 35
+            frame_feedback.append("❌ HIPS SAGGING - engage core!")
+            frame_score -= 35
             self.alignment_warnings += 1
         elif body_angle < 165:
-            self.feedback.append("⚠️ Slight hip sag")
-            self.form_score -= 15
+            frame_feedback.append("⚠️ Slight hip sag")
+            frame_score -= 15
         elif body_angle > 195:
-            self.feedback.append("❌ HIPS TOO HIGH - lower them")
-            self.form_score -= 30
+            frame_feedback.append("❌ HIPS TOO HIGH - lower them")
+            frame_score -= 30
             self.alignment_warnings += 1
         elif body_angle > 185:
-            self.feedback.append("⚠️ Hips slightly high")
-            self.form_score -= 10
+            frame_feedback.append("⚠️ Hips slightly high")
+            frame_score -= 10
         else:
-            self.feedback.append("✓✓ Perfect plank position")
+            frame_feedback.append("✓✓ Perfect plank position")
+
+        return frame_score
     
-    def _check_head_position(self, nose, shoulder):
+    def _check_head_position(self, nose, shoulder, frame_score, frame_feedback):
         """Check head/neck alignment."""
         # Head should be roughly in line with spine
         head_drop = nose[1] - shoulder[1]
-        
+
         if head_drop > 0.15:
-            self.feedback.append("⚠️ Head too low - look ahead")
-            self.form_score -= 10
+            frame_feedback.append("⚠️ Head too low - look ahead")
+            frame_score -= 10
         elif head_drop < -0.05:
-            self.feedback.append("⚠️ Chin up - neutral neck")
-            self.form_score -= 5
+            frame_feedback.append("⚠️ Chin up - neutral neck")
+            frame_score -= 5
+
+        return frame_score
     
-    def _check_hand_placement(self, wrist, shoulder):
+    def _check_hand_placement(self, wrist, shoulder, frame_score, frame_feedback):
         """Check if hands are shoulder-width."""
         hand_width = abs(wrist[0] - shoulder[0])
-        
+
         if hand_width < 0.05:
-            self.feedback.append("⚠️ Hands too narrow")
-            self.form_score -= 10
+            frame_feedback.append("⚠️ Hands too narrow")
+            frame_score -= 10
         elif hand_width > 0.25:
-            self.feedback.append("⚠️ Hands too wide")
-            self.form_score -= 10
+            frame_feedback.append("⚠️ Hands too wide")
+            frame_score -= 10
+
+        return frame_score
     
     def _count_reps(self, elbow_angle):
         """Count reps with strict standards."""

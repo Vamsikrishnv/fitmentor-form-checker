@@ -14,6 +14,8 @@ class PlankAnalyzer:
     
     def __init__(self):
         self.form_score = 100
+        self.frame_scores = []
+        self.feedback_counts = {}
         self.feedback = []
         self.start_time = None
         self.hold_time = 0
@@ -21,8 +23,8 @@ class PlankAnalyzer:
         
     def analyze(self, landmarks, image):
         """Analyze plank form."""
-        self.form_score = 100
-        self.feedback = []
+        frame_score = 100
+        frame_feedback = []
         
         try:
             # Get coordinates
@@ -51,16 +53,32 @@ class PlankAnalyzer:
                 self._check_hip_position(hip, shoulder, ankle)
                 
             else:
-                self.feedback.append("⚠️ Get in plank position!")
+                frame_feedback.append("⚠️ Get in plank position!")
                 self.start_time = None
                 self.hold_time = 0
             
             # Draw feedback
             self._draw_feedback(image)
-            
+
+            # Store frame score
+            self.frame_scores.append(max(0, frame_score))
+
+            # Accumulate feedback
+            for msg in frame_feedback:
+                self.feedback_counts[msg] = self.feedback_counts.get(msg, 0) + 1
+
+            # Calculate average score
+            if self.frame_scores:
+                self.form_score = int(sum(self.frame_scores) / len(self.frame_scores))
+
+            # Get most common feedback
+            if self.feedback_counts:
+                sorted_feedback = sorted(self.feedback_counts.items(), key=lambda x: x[1], reverse=True)
+                self.feedback = [msg for msg, count in sorted_feedback[:4]]
+
         except Exception as e:
-            self.feedback.append(f"Error: {str(e)}")
-            
+            frame_feedback.append(f"Error: {str(e)}")
+
         return image
     
     def _check_position(self, shoulder, hip, elbow):
@@ -82,13 +100,13 @@ class PlankAnalyzer:
     def _check_body_alignment(self, body_angle):
         """Check if body forms straight line."""
         if 160 <= body_angle <= 200:
-            self.feedback.append("✅ Perfect alignment!")
+            frame_feedback.append("✅ Perfect alignment!")
         elif body_angle < 160:
-            self.feedback.append("❌ Hips sagging - Engage core!")
-            self.form_score -= 30
+            frame_feedback.append("❌ Hips sagging - Engage core!")
+            frame_score -= 30
         else:
-            self.feedback.append("❌ Hips too high - Lower them!")
-            self.form_score -= 25
+            frame_feedback.append("❌ Hips too high - Lower them!")
+            frame_score -= 25
     
     def _check_hip_position(self, hip, shoulder, ankle):
         """Check hip height relative to body."""
@@ -96,8 +114,8 @@ class PlankAnalyzer:
         hip_deviation = abs(hip[1] - ((shoulder[1] + ankle[1]) / 2))
         
         if hip_deviation > 0.1:
-            self.feedback.append("⚠️ Keep hips level!")
-            self.form_score -= 15
+            frame_feedback.append("⚠️ Keep hips level!")
+            frame_score -= 15
     
     def _draw_feedback(self, image):
         """Draw feedback on image."""

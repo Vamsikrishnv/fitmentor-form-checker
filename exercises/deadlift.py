@@ -13,6 +13,8 @@ class DeadliftAnalyzer:
     
     def __init__(self):
         self.form_score = 100
+        self.frame_scores = []
+        self.feedback_counts = {}
         self.feedback = []
         self.rep_count = 0
         self.is_down = False
@@ -21,8 +23,8 @@ class DeadliftAnalyzer:
         
     def analyze(self, landmarks, image):
         """Analyze deadlift with strict safety checks."""
-        self.form_score = 100
-        self.feedback = []
+        frame_score = 100
+        frame_feedback = []
         self.critical_warning = False
         
         try:
@@ -56,8 +58,25 @@ class DeadliftAnalyzer:
             self._draw_angles(image, hip, hip_angle, back_angle)
             self._draw_safety_warning(image)
             
+
+            # Store frame score
+            self.frame_scores.append(max(0, frame_score))
+
+            # Accumulate feedback
+            for msg in frame_feedback:
+                self.feedback_counts[msg] = self.feedback_counts.get(msg, 0) + 1
+
+            # Calculate average score
+            if self.frame_scores:
+                self.form_score = int(sum(self.frame_scores) / len(self.frame_scores))
+
+            # Get most common feedback
+            if self.feedback_counts:
+                sorted_feedback = sorted(self.feedback_counts.items(), key=lambda x: x[1], reverse=True)
+                self.feedback = [msg for msg, count in sorted_feedback[:4]]
+
         except Exception as e:
-            self.feedback.append(f"Error: {str(e)}")
+            frame_feedback.append(f"Error: {str(e)}")
             
         return image
     
@@ -67,24 +86,24 @@ class DeadliftAnalyzer:
         # Angle should be 150-200° (straight line)
         
         if back_angle < 135:
-            self.feedback.append("❌ STOP! BACK ROUNDING - INJURY RISK!")
+            frame_feedback.append("❌ STOP! BACK ROUNDING - INJURY RISK!")
             self.form_score = 0  # Zero score for safety violation
             self.back_warnings += 1
             self.critical_warning = True
             return
         
         if back_angle < 145:
-            self.feedback.append("❌ Dangerous back position!")
-            self.form_score -= 50
+            frame_feedback.append("❌ Dangerous back position!")
+            frame_score -= 50
             self.back_warnings += 1
         elif back_angle < 155:
-            self.feedback.append("⚠️ WARNING: Back rounding detected")
-            self.form_score -= 30
+            frame_feedback.append("⚠️ WARNING: Back rounding detected")
+            frame_score -= 30
         elif 155 <= back_angle <= 200:
-            self.feedback.append("✓✓ SAFE - Back neutral")
+            frame_feedback.append("✓✓ SAFE - Back neutral")
         else:
-            self.feedback.append("⚠️ Over-extending back")
-            self.form_score -= 15
+            frame_feedback.append("⚠️ Over-extending back")
+            frame_score -= 15
     
     def _check_hip_hinge(self, hip_angle, knee_angle):
         """Check proper hip-dominant movement."""
@@ -95,13 +114,13 @@ class DeadliftAnalyzer:
         knee_bend = 180 - knee_angle
         
         if hip_bend > knee_bend + 15:
-            self.feedback.append("✓ Good hip hinge pattern")
+            frame_feedback.append("✓ Good hip hinge pattern")
         elif hip_bend > knee_bend:
-            self.feedback.append("⚠️ More hip hinge needed")
-            self.form_score -= 10
+            frame_feedback.append("⚠️ More hip hinge needed")
+            frame_score -= 10
         else:
-            self.feedback.append("❌ Too much knee bend - not a squat!")
-            self.form_score -= 25
+            frame_feedback.append("❌ Too much knee bend - not a squat!")
+            frame_score -= 25
     
     def _check_bar_path(self, shoulder, hip, knee):
         """Check if 'bar' stays close to body."""
@@ -109,10 +128,10 @@ class DeadliftAnalyzer:
         shoulder_knee_distance = abs(shoulder[0] - knee[0])
         
         if shoulder_knee_distance > 0.2:
-            self.feedback.append("⚠️ Bar too far - stay closer")
-            self.form_score -= 20
+            frame_feedback.append("⚠️ Bar too far - stay closer")
+            frame_score -= 20
         else:
-            self.feedback.append("✓ Good bar path")
+            frame_feedback.append("✓ Good bar path")
     
     def _check_lockout(self, hip_angle, knee_angle):
         """Check full lockout at top."""
@@ -120,10 +139,10 @@ class DeadliftAnalyzer:
         if hip_angle > 165 and knee_angle > 165:
             # Check if truly standing (not just extended)
             if hip_angle > 170:
-                self.feedback.append("✓ Full lockout achieved")
+                frame_feedback.append("✓ Full lockout achieved")
         elif hip_angle > 140:
-            self.feedback.append("⚠️ Lock out hips at top")
-            self.form_score -= 10
+            frame_feedback.append("⚠️ Lock out hips at top")
+            frame_score -= 10
     
     def _count_reps(self, hip_angle):
         """Count reps only with safe form."""

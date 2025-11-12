@@ -11,6 +11,8 @@ from utils.angle_calculator import calculate_angle, get_landmark_coords
 class ShoulderRaiseAnalyzer:
     def __init__(self):
         self.form_score = 100
+        self.frame_scores = []
+        self.feedback_counts = {}
         self.feedback = []
         self.rep_count = 0
         self.is_raised = False
@@ -28,19 +30,36 @@ class ShoulderRaiseAnalyzer:
             arm_angle = calculate_angle(hip, shoulder, elbow)
             
             if 70 <= arm_angle <= 110:
-                self.feedback.append("✅ Perfect height!")
+                frame_feedback.append("✅ Perfect height!")
             elif arm_angle < 70:
-                self.feedback.append("⚠️ Raise higher!")
-                self.form_score -= 20
+                frame_feedback.append("⚠️ Raise higher!")
+                frame_score -= 20
             else:
-                self.feedback.append("⚠️ Don't go too high!")
-                self.form_score -= 10
+                frame_feedback.append("⚠️ Don't go too high!")
+                frame_score -= 10
             
             self._count_reps(arm_angle)
             self._draw_feedback(image)
             
+
+            # Store frame score
+            self.frame_scores.append(max(0, frame_score))
+
+            # Accumulate feedback
+            for msg in frame_feedback:
+                self.feedback_counts[msg] = self.feedback_counts.get(msg, 0) + 1
+
+            # Calculate average score
+            if self.frame_scores:
+                self.form_score = int(sum(self.frame_scores) / len(self.frame_scores))
+
+            # Get most common feedback
+            if self.feedback_counts:
+                sorted_feedback = sorted(self.feedback_counts.items(), key=lambda x: x[1], reverse=True)
+                self.feedback = [msg for msg, count in sorted_feedback[:4]]
+
         except Exception as e:
-            self.feedback.append(f"Error: {str(e)}")
+            frame_feedback.append(f"Error: {str(e)}")
             
         return image
     

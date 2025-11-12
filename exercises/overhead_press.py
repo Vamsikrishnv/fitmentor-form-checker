@@ -11,6 +11,8 @@ from utils.angle_calculator import calculate_angle, get_landmark_coords
 class OverheadPressAnalyzer:
     def __init__(self):
         self.form_score = 100
+        self.frame_scores = []
+        self.feedback_counts = {}
         self.feedback = []
         self.rep_count = 0
         self.is_up = False
@@ -27,16 +29,33 @@ class OverheadPressAnalyzer:
             elbow_angle = calculate_angle(shoulder, elbow, wrist)
             
             if elbow_angle > 160:
-                self.feedback.append("✅ Full lockout!")
+                frame_feedback.append("✅ Full lockout!")
             else:
-                self.feedback.append("⚠️ Lock out fully!")
-                self.form_score -= 20
+                frame_feedback.append("⚠️ Lock out fully!")
+                frame_score -= 20
             
             self._count_reps(elbow_angle)
             self._draw_feedback(image)
             
+
+            # Store frame score
+            self.frame_scores.append(max(0, frame_score))
+
+            # Accumulate feedback
+            for msg in frame_feedback:
+                self.feedback_counts[msg] = self.feedback_counts.get(msg, 0) + 1
+
+            # Calculate average score
+            if self.frame_scores:
+                self.form_score = int(sum(self.frame_scores) / len(self.frame_scores))
+
+            # Get most common feedback
+            if self.feedback_counts:
+                sorted_feedback = sorted(self.feedback_counts.items(), key=lambda x: x[1], reverse=True)
+                self.feedback = [msg for msg, count in sorted_feedback[:4]]
+
         except Exception as e:
-            self.feedback.append(f"Error: {str(e)}")
+            frame_feedback.append(f"Error: {str(e)}")
             
         return image
     
